@@ -5,3 +5,84 @@ date: "2024-12-02"
 output: github_document
 ---
 
+```{r}
+library(tidyverse)
+library(modelr)
+```
+
+## Problem 2 
+Import and Read the data
+```{r}
+homicides = read_csv("./data/homicide-data.csv", na = c(".", "", "NA"))
+```
+
+Data processing
+```{r}
+homicides_clean <- homicides %>%
+  mutate(
+    city_state = paste(city, state, sep = ", "),
+    solved_binary = ifelse(disposition %in% c("Closed without arrest", "Open/No arrest"), 0, 1)
+  ) %>%
+  filter(
+    !(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")),
+    victim_race %in% c("White", "Black")
+  ) %>%
+  mutate(victim_age = as.numeric(victim_age)) %>%
+  drop_na(victim_age)
+```
+
+Logistic Regression for Baltimore
+```{r}
+baltimore_model <- homicides_clean %>%
+  filter(city_state == "Baltimore, MD") %>%
+  glm(solved_binary ~ victim_age + victim_sex + victim_race, data = ., family = binomial)
+
+baltimore_results <- broom::tidy(baltimore_model) %>%
+  mutate(odds_ratio = exp(estimate))
+
+baltimore_ci <- exp(confint(baltimore_model))
+baltimore_or <- baltimore_results %>%
+  filter(term == "victim_sexMale") %>%
+  summarize(
+    odds_ratio = odds_ratio,
+    ci_lower = baltimore_ci["victim_sexMale", 1],
+    ci_upper = baltimore_ci["victim_sexMale", 2]
+  )
+
+baltimore_or
+```
+
+Logistic Regression for All Cities
+```{r}
+city_model_results <- homicides_clean %>%
+  group_by(city_state) %>%
+  nest() %>%
+  mutate(
+    city_model = map(data, ~ glm(solved_binary ~ victim_age + victim_sex + victim_race, data = ., family = binomial)),
+    city_or_ci = map(city_model, function(model) {
+      model_tidy <- broom::tidy(model) %>%
+        mutate(odds_ratio = exp(estimate))
+      ci <- exp(confint(model))
+      sex_ci <- ci["victim_sexMale", ]
+      model_tidy %>%
+        filter(term == "victim_sexMale") %>%
+        summarize(
+          odds_ratio = odds_ratio,
+          ci_lower = sex_ci[1],
+          ci_upper = sex_ci[2]
+        )
+    })
+  ) %>%
+  select(city_state, city_or_ci) %>%
+  unnest(city_or_ci)
+
+city_model_results %>%
+  knitr::kable(
+    digits = 3,
+    format = "markdown"
+  )
+```
+
+
+
+
