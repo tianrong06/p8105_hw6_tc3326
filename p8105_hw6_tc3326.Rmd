@@ -63,7 +63,7 @@ weather_results <-
 # Plot for R-squared
 plot_r_squared <- weather_results %>%
   ggplot(aes(x = r_squared)) +
-  geom_histogram(binwidth = 0.01, fill = "blue", color = "black", alpha = 0.8) +
+  geom_histogram(binwidth = 0.005, fill = "blue", color = "black", alpha = 0.8) +
   labs(
     title = "Bootstrap Distribution of R-squared",
     x = "R-squared",
@@ -81,7 +81,7 @@ plot_r_squared
 # Plot for log(β0 * β1)
 plot_log_beta <- weather_results %>%
   ggplot(aes(x = log_intercept_slope)) +
-  geom_histogram(binwidth = 0.01, fill = "green", color = "black", alpha = 0.8) +
+  geom_histogram(binwidth = 0.005, fill = "green", color = "black", alpha = 0.8) +
   labs(
     title = "Bootstrap Distribution of log(β0 * β1)",
     x = "log(β0 * β1)",
