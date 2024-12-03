@@ -108,6 +108,54 @@ city_model_results %>%
 * In six cities: Albuquerque, Stockton, Fresno, Nashville, Richmond, and 
 Atlanta, male victims are more likely to have cases solved. In most cities, male victims are less likely to have their cases solved compared to female victims. 
 
+## Problem 3
+Import and Clean data
+```{r}
+birthweight_data <- read_csv("./data/birthweight.csv", na = c(".", "", "NA")) %>%
+  mutate(
+    baby_sex = factor(babysex, levels = c(1, 2), labels = c("Male", "Female")),
+    father_race = factor(frace, levels = c(1, 2, 3, 4, 8, 9), labels = c("White", "Black", "Asian", "Puerto Rican", "Other", "Unknown")),
+    mother_race = factor(mrace, levels = c(1, 2, 3, 4, 8), labels = c("White", "Black", "Asian", "Puerto Rican", "Other")),
+    malformations = factor(malform, levels = c(0, 1), labels = c("Absent", "Present"))
+  )
+
+# Check for missing data
+colSums(is.na(birthweight_data))
+```
+
+Stepwise regression to propose a model
+```{r}
+full_model <- lm(bwt ~ ., data = birthweight_data)
+stepwise_model <- step(full_model, direction = "both")
+
+summary (stepwise_model)
+
+final_model <- lm(bwt ~ baby_sex + bhead + blength + delwt + fincome + gaweeks + mheight + mother_race + parity + ppwt + smoken, data = birthweight_data)
+
+summary(final_model)
+```
+
+* Started with a full model including all predictors. Used stepwise regression (forward and backward selection) to identify significant predictors. Final model included variables related to baby characteristics, maternal factors, gestational age, socioeconomic status, and parity. Achieved an adjusted R-squared of 0.7173 and residual standard error of 272.3 grams.
+
+Add predictions and residuals to the data for plotting
+```{r}
+birthweight_data <- birthweight_data %>%
+  add_predictions(final_model, var = "fitted_values") %>%
+  add_residuals(final_model, var = "residuals")
+
+# Plot residuals vs fitted values
+ggplot(birthweight_data, aes(x = fitted_values, y = residuals)) +
+  geom_point(size = 0.7, alpha = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Residuals vs Fitted Values",
+    x = "Fitted Values",
+    y = "Residuals"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
 
 
 
