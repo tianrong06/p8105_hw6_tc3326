@@ -8,6 +8,106 @@ output: github_document
 ```{r}
 library(tidyverse)
 library(modelr)
+library(broom)
+```
+
+## Problem 1
+
+download data
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+```{r}
+# Use 5000 bootstrap samples
+bootstraps <- 
+  weather_df %>%
+  modelr::bootstrap(5000) %>%
+  mutate(
+    bootstrap_data = map(strap, as_tibble),
+    fitted_models = map(bootstrap_data, ~ lm(tmax ~ tmin, data = .x))
+  )
+
+# Compute estimates for R-squared, β0, and β1
+weather_results <- 
+  bootstraps %>%
+  mutate(coefficients = map(fitted_models, broom::tidy)) %>%
+  unnest(coefficients) %>%
+  select(bootstrap_id = .id, fitted_models, term, estimate) %>%
+  pivot_wider(
+    id_cols = c(bootstrap_id, fitted_models),
+    names_from = term,
+    values_from = estimate
+  ) %>%
+  select(bootstrap_id, 
+         fitted_models, 
+         intercept = `(Intercept)`, 
+         slope = tmin) %>%
+  mutate(
+    log_intercept_slope = log(intercept * slope)
+  ) %>%
+  mutate(model_summary = map(fitted_models, broom::glance)) %>%
+  unnest(model_summary) %>%
+  select(bootstrap_id, intercept, slope, log_intercept_slope, r_squared = r.squared)
+
+# Plot for R-squared
+plot_r_squared <- weather_results %>%
+  ggplot(aes(x = r_squared)) +
+  geom_histogram(binwidth = 0.01, fill = "blue", color = "black", alpha = 0.8) +
+  labs(
+    title = "Bootstrap Distribution of R-squared",
+    x = "R-squared",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+plot_r_squared
+
+# Plot for log(β0 * β1)
+plot_log_beta <- weather_results %>%
+  ggplot(aes(x = log_intercept_slope)) +
+  geom_histogram(binwidth = 0.01, fill = "green", color = "black", alpha = 0.8) +
+  labs(
+    title = "Bootstrap Distribution of log(β0 * β1)",
+    x = "log(β0 * β1)",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+plot_log_beta
+```
+* The R-squared values are concentrated around 0.91, with most values between 0.89 and 0.93. The log(β₀ * β₁) centered around 2.01, with most values between 1.96 and 2.05. Both distributions are symmetric and stable, indicating the robustness of the linear regression model.
+
+95% confidence interval for R-squared and log(β0 * β1)
+```{r}
+ci_r_squared <- quantile(weather_results$r_squared, probs = c(0.025, 0.975))
+ci_log_intercept_slope <- quantile(weather_results$log_intercept_slope, probs = c(0.025, 0.975))
+
+tibble(
+  Metric = c("R-squared", "log(β0 * β1)"),
+  `2.5%` = c(ci_r_squared[1], ci_log_intercept_slope[1]),
+  `97.5%` = c(ci_r_squared[2], ci_log_intercept_slope[2])
+)
 ```
 
 ## Problem 2 
